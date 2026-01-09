@@ -1,0 +1,33 @@
+{
+  // Python 解释器路径（可选，通常自动检测）
+  "python.defaultInterpreterPath": "./venv/bin/python", // 如 ～/.pyenv/versions/3.11/bin/python
+  // 启用 Pylance（微软官方语言服务器）
+  "python.languageServer": "Pylance",
+  // 自动格式化保存时
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.organizeImports": "explicit",
+    "source.fixAll": "explicit"
+  },
+  // 指定 Python 文件使用 Black 格式化
+  "[python]": {
+    "editor.defaultFormatter": "ms-python.black-formatter",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": "explicit",
+      "source.fixAll.ruff": "explicit"
+    }
+  },
+  // Black 配置（可选：指定 line-length 等）
+  "black-formatter.args": [
+    "--line-length=88"
+  ],
+  // Ruff 配置
+  "ruff.enable": true,
+  // 可选：禁用其他 linter 避免冲突
+  "python.linting.enabled": false,
+  "python.linting.pylintEnabled": false,
+  "python.linting.flake8Enabled": false,
+  // 导入排序（Ruff 可处理，也可用 isort，但建议统一用 Ruff）
+  "isort.args": [], // 如果不用 isort，可忽略
+}
