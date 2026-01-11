@@ -244,7 +244,7 @@ def generate_report(df: pd.DataFrame):
 
     # 关注的转债
     print("\n\n【值得关注的转债】\n")
-    focus = screen_focus_bonds(df, hPrice=115)
+    focus = screen_focus_bonds(df, hPrice=120)
 
     for category, bonds in focus.items():
         print(f"\n{category}: {len(bonds)} 条")
