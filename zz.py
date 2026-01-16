@@ -98,51 +98,61 @@ def calculate_cb_with_reset(
     p_reset=0.3,  # 触发后的下修概率（博弈参数）
     net_asset_val=5.0,  # 每股净资产（下修底线）
 ):
+    # 1. 基础参数计算
     dt = T / steps
     u = np.exp(sigma * np.sqrt(dt))
     d = 1 / u
     p = (np.exp(r * dt) - d) / (u - d)
     df = np.exp(-r * dt)
 
-    # 1. 终点价值初始化
+    # 2. 初始化末端（到期时刻）的正股价格
     st = S0 * d ** (np.arange(steps, -1, -1)) * u ** (np.arange(0, steps + 1, 1))
+
+    # 3. 初始化末端（到期时刻）的转债价值
+    # 到期价值 = max(转股价值, 赎回价)
     conv_ratio = 100 / K
     values = np.maximum(st * conv_ratio, redemption_price)
 
-    # 2. 反向回溯
+    # 4. 反向回溯计算（从 T-1 层回到 0 层）
     for i in range(steps - 1, -1, -1):
-        # 基础期望价
+        # 计算基础期望价值（持有价值）
         values = (p * values[1:] + (1 - p) * values[:-1]) * df
+
+        # 计算当前时刻的股价
         st = S0 * d ** (np.arange(i, -1, -1)) * u ** (np.arange(0, i + 1, 1))
 
+        # --- 核心修正：动态债底逻辑 ---
+        # 债底不应该是一个死数字，它会随着时间流逝，从当前的 pure_bond_value 慢慢向 redemption_price 靠拢
+        # 这里使用线性插值模拟债底的“时间增值”
+        current_bond_floor = pure_bond_value + (redemption_price - pure_bond_value) * (
+            1 - i / steps
+        )
+
         for j in range(len(values)):
-            # --- 修正后的下修逻辑 ---
+            # A. 计算当前节点的转股价值
+            conv_val = st[j] * conv_ratio
+
+            # B. 考虑下修条款的博弈 (仅在股价低于下修线时计算)
             if st[j] <= K * reset_threshold_pct:
-                # 下修后的转股价 K_new (假设下修为当前股价的 1.02 倍)
                 k_new = max(st[j] * 1.02, net_asset_val)
-
-                # 【关键修正】：下修后的价值 = 新的转股价值 + 期权溢价补偿
-                # 这里的 1.15 是一个估算系数，表示平价转债通常有 15% 的期权溢价
-                # 在高波动率（如你的 57%）下，这个溢价其实应该更高
-                v_after_reset = (100 / k_new * st[j]) * 1.20  # 这里的 1.20 是溢价补偿
-
-                # 只有当下修后的价值高于原价值时，下修才有意义（博弈均衡）
+                # 下修后的价值补偿：假设回归平价并带有 20% 的溢价（应对高波动率）
+                v_after_reset = (100 / k_new * st[j]) * 1.20
                 if v_after_reset > values[j]:
                     values[j] = (1 - p_reset) * values[j] + p_reset * v_after_reset
 
-            # 标准条款
-            conv_val = (100 / K) * st[j]
-            values[j] = max(
-                values[j],
-                pure_bond_value * (1 - (i * dt) / T)
-                + redemption_price * (i * dt) / T / 1.1,
-            )  # 简化的动态债底
-            values[j] = max(values[j], conv_val)
+            # C. 取【期望价值、债底、转股价值】中的最大者
+            # 这是修正的关键：确保每一层都有强力债底支撑
+            values[j] = max(values[j], current_bond_floor, conv_val)
 
+            # D. 强制赎回限制 (发行人博弈)
+            # 如果转股价值远超强赎线，价值会被限制在 max(赎回价, 转股价值)
             if st[j] >= call_price:
                 values[j] = min(values[j], max(redemption_price, conv_val))
+
+            # E. 回售保护 (投资者博弈)
             if st[j] <= put_price:
                 values[j] = max(values[j], put_price)
+
     return values[0]
 
 
@@ -172,7 +182,7 @@ v_with_reset = calculate_cb_with_reset(
     call_price=25.142,
     put_price=13.538,
     redemption_price=113.00,
-    p_reset=0.3,
+    p_reset=0.8,
 )
 
 print(f"常规理论价: {v_no_reset:.2f}")
